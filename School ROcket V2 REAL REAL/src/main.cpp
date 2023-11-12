@@ -26,7 +26,7 @@ using namespace std;
 // specific I2C addresses may be passed as a parameter here
 // AD0 low = 0x68 (default for SparkFun breakout and InvenSense evaluation board)
 // AD0 high = 0x69
-MPU6050 mpu;
+
 //MPU6050 mpu(0x69); // <-- use for AD0 high
 
 
@@ -46,8 +46,8 @@ bool blinkState = false;
 
 
 //Servo Setup vars
-Servo yawServo;
-Servo pitchServo;
+Servo yawServo; //top servo
+Servo pitchServo; // bottom servo
 int posYaw = 0;
 int posPitch = 0;
 
@@ -57,8 +57,8 @@ float gain = 2.463; //gain got from fusion
 double SetpointY, InputY, OutputY;
 double SetpointP, InputP, OutputP;
 float consKp = 0.6, consKi = 0.1, consKd = 0.5;
-PID yawPID(&InputY, &OutputY, &SetpointY, consKp, consKi, consKd, DIRECT);
-PID pitchPID(&InputP, &OutputP, &SetpointP, consKp, consKi, consKd, DIRECT);
+PID upPID(&InputY, &OutputY, &SetpointY, consKp, consKi, consKd, DIRECT);
+PID downPID(&InputP, &OutputP, &SetpointP, consKp, consKi, consKd, DIRECT);
 int yawOffset = 82; //offset of pos from 90 degrees
 int pitchOffset = 106; //offset of pos from 90 degrees
 
@@ -200,10 +200,10 @@ void setup() {
       pitchServo.write(pitchOffset);
       //SetpointY = 0;
       //SetpointP = 0;
-      yawPID.SetOutputLimits(-15, 15);
-      pitchPID.SetOutputLimits(-15, 15);
-      yawPID.SetMode(AUTOMATIC);
-      pitchPID.SetMode(AUTOMATIC);
+      upPID.SetOutputLimits(0, 100);
+      downPID.SetOutputLimits(0, 100);
+      upPID.SetMode(AUTOMATIC);
+      downPID.SetMode(AUTOMATIC);
 
     #endif
 
@@ -255,7 +255,7 @@ bool do50hz(DynamicJsonDocument doc) {
       Serial.println(speed);
       Serial.println(((newaltitude-oldaltitude)));
       oldaltitude = newaltitude;
-      if ((speed < (-7)) & (doc["zaccel"]<0))
+      if ((speed > (2)))
       {
         return false; // IS appogee
       }
@@ -263,12 +263,7 @@ bool do50hz(DynamicJsonDocument doc) {
         return true;
       }
     }
-    
-
-    
-      
-
-      
+  
     }
     else
     {
@@ -276,14 +271,11 @@ bool do50hz(DynamicJsonDocument doc) {
     }
     return true;
   
-
-    
-  
 }
 
 
 
-
+float projectedApogee ;
 
 void launchtime() {
   
@@ -299,9 +291,19 @@ void launchtime() {
   {
     StaticJsonDocument<500> doc;
     //Serial.print("start loop 2-2");
+                 if (! bmp.performReading()) {
+                    Serial.println("Failed to perform reading :(");
+                    
+                } else {
+                    doc["altitude"] = ceil((bmp.readAltitude(SEALEVELPRESSURE_HPA))*1000)/1000;
+                    doc["tempurature"] = ceil((bmp.temperature)*1000)/1000;
+                    doc["message"] = "In Flight" ;
+                    doc["speed"] = ceil(speed*1000)/1000 ;
 
+                }
 
-                InputP = (pitch);
+                //InputP = (pitch);
+                projectedApogee = 
                 InputY = (yaw);
                 yawPID.Compute();
                 pitchPID.Compute();
@@ -343,55 +345,7 @@ void launchtime() {
                 serializeJson(doc, Serial);
                 //serializeJson(doc, loraoutput);
                 //sendData("Helloooo");
-                
-
-
-                //onReceive(LoRa.parsePacket());
-                #endif
-        
-    
-    
-
-    #ifdef ROCKET_PROCEDURES
-                //bmp setup
-                
-                 if (! bmp.performReading()) {
-                    Serial.println("Failed to perform reading :(");
-                    
-                } else {
-                    doc["altitude"] = ceil((bmp.readAltitude(SEALEVELPRESSURE_HPA))*1000)/1000;
-                    doc["tempurature"] = ceil((bmp.temperature)*1000)/1000;
-                    doc["message"] = "In Flight" ;
-                    doc["speed"] = ceil(speed*1000)/1000 ;
-
-                }
-                
-            
-
-                // blink LED to indicate activity
-                Serial.println("start procedure");
-                blinkState = !blinkState;
-                digitalWrite(LED_PIN, blinkState);
-                String loraoutput = "";
-                serializeJson(doc, loraoutput);
-                Serial.println(loraoutput);
-
-          
-
-
-
-                //sendSecond(loraoutput);
                 notappoge = do50hz(doc);
-
-
-
-
-
-
-
-
-                
-    #endif
 
   }
   //appogee hit, deploy chute
@@ -485,7 +439,7 @@ String dataOut = "";
 // ================================================================
 // ===                    MAIN PROGRAM LOOP                     ===
 // ================================================================
-
+int filewritetime ;
 void loop() {
 
     //demoLaunch();
@@ -503,9 +457,9 @@ void loop() {
                     doc["altitude"] = bmp.readAltitude(SEALEVELPRESSURE_HPA);
                     doc["tempurature"] = bmp.temperature;
                     doc["message"] = "Ready for Launch" ;
-
+                    launch=do50hz();
                 }
-
+              if (millis() - filewritetime > 500 || launch = true) {
               serializeJson(doc, dataOut);
               File dataFile = SD.open("datalog.txt", FILE_WRITE);
 
@@ -520,7 +474,26 @@ void loop() {
               else {
                 Serial.println("error opening datalog.txt");
               }
+              }
         }
+        doc["message"] = "START" ;
+        serializeJson(doc, dataOut);
+        File dataFile = SD.open("datalog.txt", FILE_WRITE);
+
+        // if the file is available, write to it:
+        if (dataFile) {
+          dataFile.println(dataString);
+          dataFile.close();
+          // print to the serial port too:
+          Serial.println(dataString);
+        }
+        // if the file isn't open, pop up an error:
+        else {
+          Serial.println("error opening datalog.txt");
+        }
+        delay(3000);
+        launchtime();
+
         
         
     #endif
