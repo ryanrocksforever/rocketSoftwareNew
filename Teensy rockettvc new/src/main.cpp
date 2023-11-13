@@ -1020,9 +1020,9 @@ void launchtime() {
   
   }
 
-  //digitalWrite(PYRO_PINL, HIGH);
-  //delay(1000);
-  //digitalWrite(PYRO_PINL, LOW);
+  digitalWrite(PYRO_PINL, HIGH);
+  delay(1000);
+  digitalWrite(PYRO_PINL, LOW);
 
   bool notappoge = true;
 

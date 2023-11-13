@@ -3,16 +3,18 @@
 // I2Cdev and MPU6050 must be installed as libraries, or else the .cpp/.h files
 // for both classes must be in the include path of your project
 #include "Servo.h"
-#include <PID_v1.h>
+#include PID_v1.h
 
 #include <SPI.h>              // include libraries
 #include <SD.h>
-
+#include "MPU6050_6Axis_MotionApps20.h"
 #include <ArduinoJson.h>
 #include <Adafruit_Sensor.h>
 #include "Adafruit_BMP3XX.h"
 #include <iostream>
 #include <sstream>
+#include <cmath>
+#include <./projectileMotionQuadraticDrag/mainAltiProject.h>
 using namespace std;
 //#include "MPU6050.h" // not necessary if using MotionApps include file
 
@@ -26,7 +28,7 @@ using namespace std;
 // specific I2C addresses may be passed as a parameter here
 // AD0 low = 0x68 (default for SparkFun breakout and InvenSense evaluation board)
 // AD0 high = 0x69
-
+MPU6050 mpu;
 //MPU6050 mpu(0x69); // <-- use for AD0 high
 
 
@@ -43,6 +45,18 @@ using namespace std;
 bool blinkState = false;
 
 // MPU control/status vars
+bool dmpReady = false;  // set true if DMP init was successful
+uint8_t mpuIntStatus;   // holds actual interrupt status byte from MPU
+uint8_t devStatus;      // return status after each device operation (0 = success, !0 = error)
+uint16_t packetSize;    // expected DMP packet size (default is 42 bytes)
+uint16_t fifoCount;     // count of all bytes currently in FIFO
+uint8_t fifoBuffer[64]; // FIFO storage buffer
+
+#define MPU6050_ACCEL_FS_2          0x00
+volatile bool mpuInterrupt = false;     // indicates whether MPU interrupt pin has gone high
+void dmpDataReady() {
+    mpuInterrupt = true;
+}
 
 
 //Servo Setup vars
@@ -50,6 +64,11 @@ Servo yawServo; //top servo
 Servo pitchServo; // bottom servo
 int posYaw = 0;
 int posPitch = 0;
+
+
+int fullOpen = 100; //100 percent open - offset
+
+flaot dragConst = 0.561; // average drag coefficient
 
 float gain = 2.463; //gain got from fusion
 
@@ -62,6 +81,12 @@ PID downPID(&InputP, &OutputP, &SetpointP, consKp, consKi, consKd, DIRECT);
 int yawOffset = 82; //offset of pos from 90 degrees
 int pitchOffset = 106; //offset of pos from 90 degrees
 
+
+
+//Altitude projection 
+
+
+projectedAlt finalAlt {  };
 
 
 
@@ -77,14 +102,6 @@ Adafruit_BMP3XX bmp;
 
 
 
-// ================================================================
-// ===               INTERRUPT DETECTION ROUTINE                ===
-// ================================================================
-
-volatile bool mpuInterrupt = false;     // indicates whether MPU interrupt pin has gone high
-void dmpDataReady() {
-    mpuInterrupt = true;
-}
 
 
 
@@ -106,6 +123,70 @@ void setup() {
 
 
     #ifdef ROCKET_PROCEDURES
+        Serial.println(F("Initializing I2C devices..."));
+    mpu.initialize();
+    pinMode(INTERRUPT_PIN, INPUT);
+
+    // verify connection
+    Serial.println(F("Testing device connections..."));
+    Serial.println(mpu.testConnection() ? F("MPU6050 connection successful") : F("MPU6050 connection failed"));
+
+    // wait for ready
+    delay(2000);
+
+    // load and configure the DMP
+    Serial.println(F("Initializing DMP..."));
+    devStatus = mpu.dmpInitialize();
+    
+
+    // supply your own gyro offsets here, scaled for min sensitivity
+    // calibrated 3-14-23
+    
+    mpu.setXGyroOffset(99);
+    mpu.setYGyroOffset(67);
+    mpu.setZGyroOffset(118);
+    mpu.setXAccelOffset(-2911); // 1
+    mpu.setYAccelOffset(203); // 
+    mpu.setZAccelOffset(1713); // 
+
+    // make sure it worked (returns 0 if so)
+    if (devStatus == 0) {
+        // Calibration Time: generate offsets and calibrate our MPU6050
+        //mpu.CalibrateAccel(6);
+        //mpu.CalibrateGyro(6);
+        mpu.PrintActiveOffsets();
+        // turn on the DMP, now that it's ready
+        Serial.println(F("Enabling DMP..."));
+        mpu.setDMPEnabled(true);
+
+        // enable Arduino interrupt detection
+        Serial.print(F("Enabling interrupt detection (Arduino external interrupt "));
+        Serial.print(digitalPinToInterrupt(INTERRUPT_PIN));
+        Serial.println(F(")..."));
+        attachInterrupt(digitalPinToInterrupt(INTERRUPT_PIN), dmpDataReady, RISING);
+        mpuIntStatus = mpu.getIntStatus();
+
+        // set our DMP Ready flag so the main loop() function knows it's okay to use it
+        Serial.println(F("DMP ready! Waiting for first interrupt..."));
+        dmpReady = true;
+
+        // get expected DMP packet size for later comparison
+        packetSize = mpu.dmpGetFIFOPacketSize();
+        mpu.dmpGetCurrentFIFOPacket(fifoBuffer);
+        mpu.dmpGetYawPitchRoll(ypr, &q, &gravity);
+        Serial.println(ypr[2]);
+        Serial.println(ypr[0]);
+        Serial.println(ypr[1]);
+
+    } else {
+        // ERROR!
+        // 1 = initial memory load failed
+        // 2 = DMP configuration updates failed
+        // (if it's going to break, usually the code will be 1)
+        Serial.print(F("DMP Initialization failed (code "));
+        Serial.print(devStatus);
+        Serial.println(F(")"));
+    }
 
         //altimeter
         if (!bmp.begin_I2C()) {   // hardware I2C mode, can pass in address & alt Wire
@@ -198,8 +279,8 @@ void setup() {
       pitchServo.attach(21);
       yawServo.write(yawOffset);  // 140 is 90
       pitchServo.write(pitchOffset);
-      //SetpointY = 0;
-      //SetpointP = 0;
+      SetpointY = 250;
+      SetpointP = 250;
       upPID.SetOutputLimits(0, 100);
       downPID.SetOutputLimits(0, 100);
       upPID.SetMode(AUTOMATIC);
@@ -276,6 +357,8 @@ bool do50hz(DynamicJsonDocument doc) {
 
 
 float projectedApogee ;
+float lastAngle = 0;
+flaot angle;
 
 void launchtime() {
   
@@ -291,6 +374,24 @@ void launchtime() {
   {
     StaticJsonDocument<500> doc;
     //Serial.print("start loop 2-2");
+
+
+                if (mpu.dmpGetCurrentFIFOPacket(fifoBuffer)) {
+                     mpu.dmpGetQuaternion(&q, fifoBuffer);
+                    mpu.dmpGetAccel(&aa, fifoBuffer);
+                    mpu.dmpGetGravity(&gravity, &q);
+                    mpu.dmpGetLinearAccel(&aaReal, &aa, &gravity);
+                    mpu.dmpGetLinearAccelInWorld(&aaWorld, &aaReal, &q);
+                    mpu.dmpGetYawPitchRoll(ypr, &q, &gravity);
+
+                    // angle = arccosine(w) * 2
+                    angle = acos(q.w) * 2;
+                    lastAngle = angle;
+                  
+
+                } else {
+                  angle = lastAngle;
+                }
                  if (! bmp.performReading()) {
                     Serial.println("Failed to perform reading :(");
                     
@@ -303,11 +404,11 @@ void launchtime() {
                 }
 
                 //InputP = (pitch);
-                projectedApogee = 
-                InputY = (yaw);
+                projectedApogee = finalAlt(altitude, dragConst, angle, speed);
+                InputY = (projectedAlt);
                 yawPID.Compute();
-                pitchPID.Compute();
-                float yservopos = yawOffset +gain*(OutputY);
+                //pitchPID.Compute();
+                float yservopos = yawOffset +fullOpen*(OutputY/100.0);
                 if ((yservopos < (yawOffset-50)) | (yservopos >(yawOffset+70)))
                 {
                     Serial.print("Yaw out of range!!");
@@ -341,6 +442,7 @@ void launchtime() {
                 doc["tempurature"] = temperature;
                 doc["speed"] = ceil(speed*1000)/1000 ;
                 doc["message"] = "in flight";
+                doc["projectedAltitude"] = projectedAlt;
                 String loraoutput = "fff";
                 serializeJson(doc, Serial);
                 //serializeJson(doc, loraoutput);
