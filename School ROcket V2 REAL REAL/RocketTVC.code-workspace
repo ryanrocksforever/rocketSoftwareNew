@@ -1,0 +1,107 @@
+{
+	"folders": [
+		{
+			"path": "../RocketTVC"
+		},
+		{
+			"name": "RocketTVCV2",
+			"path": "../RocketTVCV2"
+		},
+		{
+			"name": "NoeMCUrockettvc",
+			"path": "../NoeMCUrockettvc"
+		},
+		{
+			"name": "Teensy rockettvc new",
+			"path": "../Teensy rockettvc new"
+		},
+		{
+			"name": "Rocket TVC Ground side",
+			"path": "../Rocket TVC Ground side"
+		},
+		{
+			"name": "teensy testing new",
+			"path": "../teensy testing new"
+		},
+		{
+			"name": "School Rocket",
+			"path": "../School Rocket"
+		},
+		{
+			"name": "School Rocket Real",
+			"path": "../School Rocket Real"
+		},
+		{
+			"name": "School ROcket V2 REAL REAL",
+			"path": "."
+		},
+		{
+			"name": "Marlin-2.0.x",
+			"path": "../../../../Downloads/Marlin-2.0.x (1)/Marlin-2.0.x"
+		},
+		{
+			"name": "Beverage Dispenser",
+			"path": "../Beverage Dispenser"
+		}
+	],
+	"settings": {
+		"files.associations": {
+			"array": "cpp",
+			"string": "cpp",
+			"string_view": "cpp",
+			"ranges": "cpp",
+			"atomic": "cpp",
+			"bit": "cpp",
+			"*.tcc": "cpp",
+			"bitset": "cpp",
+			"cctype": "cpp",
+			"chrono": "cpp",
+			"clocale": "cpp",
+			"cmath": "cpp",
+			"cstdarg": "cpp",
+			"cstddef": "cpp",
+			"cstdint": "cpp",
+			"cstdio": "cpp",
+			"cstdlib": "cpp",
+			"cstring": "cpp",
+			"ctime": "cpp",
+			"cwchar": "cpp",
+			"cwctype": "cpp",
+			"deque": "cpp",
+			"unordered_map": "cpp",
+			"vector": "cpp",
+			"exception": "cpp",
+			"algorithm": "cpp",
+			"functional": "cpp",
+			"iterator": "cpp",
+			"memory": "cpp",
+			"memory_resource": "cpp",
+			"numeric": "cpp",
+			"optional": "cpp",
+			"random": "cpp",
+			"ratio": "cpp",
+			"system_error": "cpp",
+			"tuple": "cpp",
+			"type_traits": "cpp",
+			"utility": "cpp",
+			"fstream": "cpp",
+			"initializer_list": "cpp",
+			"iosfwd": "cpp",
+			"iostream": "cpp",
+			"istream": "cpp",
+			"limits": "cpp",
+			"new": "cpp",
+			"ostream": "cpp",
+			"sstream": "cpp",
+			"stdexcept": "cpp",
+			"streambuf": "cpp",
+			"thread": "cpp",
+			"cinttypes": "cpp",
+			"typeinfo": "cpp",
+			"compare": "cpp",
+			"concepts": "cpp",
+			"list": "cpp",
+			"stop_token": "cpp"
+		}
+	}
+}
