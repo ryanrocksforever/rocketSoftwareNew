@@ -61,12 +61,12 @@ float euler[3];         // [psi, theta, phi]    Euler angle container
 float ypr[3];           // [yaw, pitch, roll]   yaw/pitch/roll container and gravity vector
 
 #define MPU6050_ACCEL_FS_2          0x00
+
+uint8_t teapotPacket[14] = { '$', 0x02, 0,0, 0,0, 0,0, 0,0, 0x00, 0x00, '\r', '\n' };
 volatile bool mpuInterrupt = false;     // indicates whether MPU interrupt pin has gone high
 void dmpDataReady() {
     mpuInterrupt = true;
 }
-
-
 //Servo Setup vars
 Servo yawServo; //top servo
 Servo pitchServo; // bottom servo
@@ -85,8 +85,8 @@ float gain = 2.463; //gain got from fusion
 //PID Loop setup stuff
 double SetpointY, InputY, OutputY;
 double SetpointP, InputP, OutputP;
-float consKp = 0.6, consKi = 0.1, consKd = 0.5;
-PID upPID(&InputY, &OutputY, &SetpointY, consKp, consKi, consKd, DIRECT);
+float consKp = 1.6, consKi = 0.7, consKd = 0;
+PID upPID(&InputY, &OutputY, &SetpointY, consKp, consKi, consKd, REVERSE);
 PID downPID(&InputP, &OutputP, &SetpointP, consKp, consKi, consKd, DIRECT);
 int yawOffset = 82; //offset of pos from 90 degrees
 int pitchOffset = 106; //offset of pos from 90 degrees
@@ -132,6 +132,13 @@ void setup() {
     Serial.begin(115200);
     delay(1000);
 
+     // join I2C bus (I2Cdev library doesn't do this automatically)
+    #if I2CDEV_IMPLEMENTATION == I2CDEV_ARDUINO_WIRE
+        Wire.begin();
+        Wire.setClock(400000); // 400kHz I2C clock. Comment this line if having compilation difficulties
+    #elif I2CDEV_IMPLEMENTATION == I2CDEV_BUILTIN_FASTWIRE
+        Fastwire::setup(400, true);
+    #endif
 
     #ifdef ROCKET_PROCEDURES
         Serial.println(F("Initializing I2C devices..."));
@@ -260,13 +267,7 @@ void setup() {
 
 
     
-    // join I2C bus (I2Cdev library doesn't do this automatically)
-    #if I2CDEV_IMPLEMENTATION == I2CDEV_ARDUINO_WIRE
-        Wire.begin();
-        Wire.setClock(400000); // 400kHz I2C clock. Comment this line if having compilation difficulties
-    #elif I2CDEV_IMPLEMENTATION == I2CDEV_BUILTIN_FASTWIRE
-        Fastwire::setup(400, true);
-    #endif
+  
 
     
 
@@ -290,7 +291,7 @@ void setup() {
       pitchServo.attach(21);
       yawServo.write(yawOffset);  // 140 is 90
       pitchServo.write(pitchOffset);
-      SetpointY = 250;
+      SetpointY = 252;
       SetpointP = 250;
       upPID.SetOutputLimits(0, 100);
       downPID.SetOutputLimits(0, 100);
@@ -368,7 +369,7 @@ int lastSendTime2 = 0;
 int counttTen = 0;
 bool countTen(DynamicJsonDocument doc) { 
   
-	if (millis() - lastSendTime2 > 1000) {
+	if (millis() - lastSendTime2 > 10000) {
     
     lastSendTime2 = millis();            // timestamp the message
     Serial.println("Countdown 1 sec");
@@ -376,8 +377,65 @@ bool countTen(DynamicJsonDocument doc) {
       return true;
     }
     counttTen++;
+} else {
+  return false;
 }
 }
+
+
+
+
+
+
+
+
+
+
+  const double dryMass=0.61;//dry mass in Kg
+  const double thereGoesGravity=9.8;
+  const double crossArea=0.003412;//cross section area in m^2
+  double estCoeffDrag = 0.56;
+  
+  // double currentSpeed = 60;
+  // double currentHeight = 114;
+double getAirDensity(double groundTemperature, double groundPressure, double currentHeight){ 
+ groundTemperature=groundTemperature+273.15;
+ const double effectiveConst=0.3;//Constant for estimating the effictive average density for drag
+ const double lapseRate=0.00649;
+ double Temperature=groundTemperature-(lapseRate*currentHeight);
+ double TemperatureApo=groundTemperature-(lapseRate*3048);//calculates air temperature at max height, may be calculated once in main()
+ const double gasConst=8.3144598;
+ const double airMolarMass=28.7484273;//@2% H2O content
+ const double thereGoesGravity=9.8;
+ double pressureChangeExp=thereGoesGravity*airMolarMass/(gasConst*currentHeight);
+ double pressureChangeExpApo=thereGoesGravity*airMolarMass/(gasConst*3048);//calculates pressure exponant at max height, may be calculated once in main()
+ double pressure=groundPressure*pow((1-(lapseRate*currentHeight/groundTemperature)),pressureChangeExp);
+ double pressureApo=groundPressure*pow((1-(lapseRate*currentHeight/groundTemperature)),pressureChangeExpApo);//calculates pressure at max height, may be calculated once in main()
+ double density=pressure*airMolarMass/(gasConst*Temperature);
+ double densityApo=pressureApo*airMolarMass/(gasConst*TemperatureApo);//calculates density at max height, may be calculated once in main()
+ double effectiveAveDensity=effectiveConst*(density-densityApo)+densityApo;
+ return effectiveAveDensity;
+}
+  int getMaxHeight(double currentHeight, double currentSpeed) {
+    double estAirDensity = getAirDensity(23.3, 135.4, currentHeight);
+    
+    double terminalVelocitySquared=(2*dryMass*thereGoesGravity/(estCoeffDrag*crossArea*estAirDensity));//simplified math by not taking the square root here
+    double maxHeight=terminalVelocitySquared/(2*thereGoesGravity)*log((pow(currentSpeed,2)+terminalVelocitySquared)/terminalVelocitySquared) + currentHeight;
+  
+
+    return maxHeight;
+
+  }
+
+
+
+
+
+
+
+
+
+
 
 double projectedApogee ;
 float lastAngle = 0;
@@ -419,15 +477,21 @@ void launchtime() {
                     Serial.println("Failed to perform reading :(");
                     
                 } else {
-                    doc["altitude"] = ceil((bmp.readAltitude(SEALEVELPRESSURE_HPA))*1000)/1000;
+                    doc["altitude"], altitude = ceil((bmp.readAltitude(SEALEVELPRESSURE_HPA))*1000)/1000;
                     doc["tempurature"] = ceil((bmp.temperature)*1000)/1000;
                     doc["message"] = "In Flight" ;
-                    doc["speed"] = ceil(speed*1000)/1000 ;
+                    doc["speed"], speed = ceil(speed*1000)/1000 ;
 
                 }
 
-                //InputP = (pitch);
-                projectedApogee = calcApogee(altitude, dragConst, angle, speed);
+
+
+                //InputY = getProjectedAltitude(Cd, v, alt);//calculate Input to PID
+                InputY = getMaxHeight(altitude, speed);
+                Serial.print("ProjectedApogee: ");
+                Serial.println(InputY);
+                
+                upPID.Compute();
                 if (projectedApogee < 100 || projectedApogee > 400)
                 {
                   Serial.println("ProjectedApogee Failed");
@@ -436,8 +500,7 @@ void launchtime() {
                   
                 }
                 
-                InputY = (projectedApogee);
-                upPID.Compute();
+            
                 //yawPID.Compute();
                 //pitchPID.Compute();
                 float yservopos = yawOffset +fullOpen*(OutputY/100.0);
@@ -612,9 +675,28 @@ double getProjectedAltitude(double Cd,double v,double alt) {
   double y = (mass/Cd)*log(cos(atan(v/sqrt(mass*g/Cd)))); // Calculate additional altitude projected
   double deltaHeight = (v * v) / (2 * g) * (mass / (Cd * referenceArea)) +
                         (v / g) * log(mass / (mass - (airDensity * referenceArea * Cd * v * v) / (2 * g)));
+  
   double ypro = deltaHeight + alt;  // Projected altitude is the additional + current alt
   return ypro;
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 void demoLaunch() {
@@ -691,8 +773,8 @@ void demoLaunch() {
                 
                 //Serial.println(Cd);
                 Cd = 0.5;
-                InputY = getProjectedAltitude(Cd, v, alt);//calculate Input to PID
-                
+                //InputY = getProjectedAltitude(Cd, v, alt);//calculate Input to PID
+                InputY = getMaxHeight(altitudes[index], speeds[index]);
                 Serial.print("ProjectedApogee: ");
                 Serial.println(InputY);
                 // if (projectedApogee < 100 || projectedApogee > 400)
@@ -755,7 +837,23 @@ void demoLaunch() {
 
 
 
+class Timer {
+public:
+    Timer(unsigned long interval) : interval_(interval), lastMillis_(millis()) {}
 
+    bool hasElapsed() {
+        unsigned long currentMillis = millis();
+        if (currentMillis - lastMillis_ >= interval_) {
+            lastMillis_ = currentMillis;
+            return true;
+        }
+        return false;
+    }
+
+private:
+    unsigned long interval_;
+    unsigned long lastMillis_;
+};
 
 
 
@@ -768,16 +866,22 @@ String dataOut = "";
 // ================================================================
 int filewritetime = 0;
 bool launch = false;
+char* dataName = "datalog.txt";
+int dataCount = 0;
 void loop() {
 
     //demoLaunch();
     //ACTUAL LAUNCH TIME
     #ifdef ACTUAL_LAUNCH
         
-        
+        static Timer timer(10000);
         while (launch == false)
         {
+          
             StaticJsonDocument<500> doc;
+            blinkState = !blinkState;
+            digitalWrite(LED_PIN, blinkState);
+
             if (! bmp.performReading()) {
                     Serial.println("Failed to perform reading :(");
                     
@@ -785,12 +889,22 @@ void loop() {
                     doc["altitude"] = bmp.readAltitude(SEALEVELPRESSURE_HPA);
                     doc["tempurature"] = bmp.temperature;
                     doc["message"] = "Ready for Launch" ;
-                    launch=countTen(doc);
+                    
                 }
-              launch=true;
+              launch=timer.hasElapsed();
+              Serial.println("Checked Time");
               if ((millis() - filewritetime) > 500 || launch == true) {
+                Serial.println("Checked Time2");
+                filewritetime = millis();
               serializeJson(doc, dataOut);
-              File dataFile = SD.open("datalog.txt", FILE_WRITE);
+              
+              while(!SD.open(dataName)) {
+                dataName = ((char)dataCount) +"datalog.txt";
+                dataCount ++;
+                Serial.println(dataName);
+              }
+              Serial.println(dataName);
+              File dataFile = SD.open(dataName, FILE_WRITE);
 
               // if the file is available, write to it:
               if (dataFile) {
@@ -804,6 +918,7 @@ void loop() {
                 Serial.println("error opening datalog.txt");
               }
               }
+              delay(100);
         }
         StaticJsonDocument<500> doc;
         doc["message"] = "START";
