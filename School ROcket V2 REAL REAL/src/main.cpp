@@ -14,7 +14,7 @@
 #include <iostream>
 #include <sstream>
 #include <cmath>
-#include <./projectileMotionQuadraticDrag/mainAltiProject.h>
+//#include <./projectileMotionQuadraticDrag/mainAltiProject.h>
 using namespace std;
 //#include "MPU6050.h" // not necessary if using MotionApps include file
 
@@ -34,9 +34,7 @@ MPU6050 mpu;
 
 //Start custom stuff for the tvc. 
 //uncomment #define USE_TVC if you want to use
-#define USE_TVC
-#define USE_TVCLOOP
-#define ROCKET_PROCEDURES
+
 #define ACTUAL_LAUNCH
 
 
@@ -140,7 +138,7 @@ void setup() {
         Fastwire::setup(400, true);
     #endif
 
-    #ifdef ROCKET_PROCEDURES
+   
         Serial.println(F("Initializing I2C devices..."));
     mpu.initialize();
     pinMode(INTERRUPT_PIN, INPUT);
@@ -262,7 +260,7 @@ void setup() {
         doc["speed"] = 0;
         serializeJson(doc, Serial);
 
-    #endif
+   
 
 
 
@@ -279,7 +277,7 @@ void setup() {
 
     
     //config servos
-    #ifdef USE_TVC
+    
       
         // initialize device
     
@@ -298,7 +296,7 @@ void setup() {
       upPID.SetMode(AUTOMATIC);
       downPID.SetMode(AUTOMATIC);
 
-    #endif
+    
 
 
     Serial.print("Initializing SD card...");
@@ -365,6 +363,67 @@ bool do50hz(DynamicJsonDocument doc) {
     return true;
   
 }
+
+
+String dataOut = "";
+char* dataName = '00datalog.txt';
+
+void log2hz(DynamicJsonDocument doc) { 
+	if (millis() - lastSendTime > 500) {
+    
+    lastSendTime = millis();            // timestamp the message
+    File dataFile = SD.open(dataName, FILE_WRITE);
+    if (dataFile) {
+                serializeJson(doc, dataOut);
+                dataFile.println(dataOut);
+                dataFile.close();
+                // print to the serial port too:
+                Serial.println(dataOut);
+              } else {
+                Serial.println("error opening datalog.txt");
+              }
+    }
+  
+}
+
+int lastSendTimeBurn = 0;
+bool waitForBurnout() {
+  if (millis() - lastSendTimeBurn > 200) {
+    lastSendTimeBurn = millis();
+    if (mpu.dmpGetCurrentFIFOPacket(fifoBuffer)) {
+                     mpu.dmpGetQuaternion(&q, fifoBuffer);
+                    mpu.dmpGetAccel(&aa, fifoBuffer);
+                    mpu.dmpGetGravity(&gravity, &q);
+                    mpu.dmpGetLinearAccel(&aaReal, &aa, &gravity);
+                    mpu.dmpGetLinearAccelInWorld(&aaWorld, &aaReal, &q);
+                    mpu.dmpGetYawPitchRoll(ypr, &q, &gravity);
+                  if (! bmp.performReading()) {
+                    Serial.println("Failed to perform reading :(");
+                    
+                } else {
+                    altitude = ceil((bmp.readAltitude(SEALEVELPRESSURE_HPA))*1000)/1000;
+                    
+
+                }
+                 
+                  
+                  if(aaReal.z < 100 && altitude >60) {
+                    return true;
+                  }
+
+                }
+    } else {
+      return false;
+    }
+    
+  
+  
+  return false;
+}
+
+
+
+
 int lastSendTime2 = 0;
 int counttTen = 0;
 bool countTen(DynamicJsonDocument doc) { 
@@ -538,11 +597,13 @@ void launchtime() {
                 doc["speed"] = ceil(speed*1000)/1000 ;
                 doc["message"] = "in flight";
                 doc["projectedAltitude"] = projectedApogee;
-                String loraoutput = "fff";
+                //String loraoutput = "fff";
                 serializeJson(doc, Serial);
+
                 //serializeJson(doc, loraoutput);
                 //sendData("Helloooo");
                 notappoge = do50hz(doc);
+                log2hz(doc);
 
   }
   //appogee hit, deploy chute
@@ -859,20 +920,20 @@ private:
 
 
 
-String dataOut = "";
+//String dataOut = "";
 
 // ================================================================
 // ===                    MAIN PROGRAM LOOP                     ===
 // ================================================================
 int filewritetime = 0;
 bool launch = false;
-char* dataName = "datalog.txt";
+//char* dataName = '00datalog.txt';
 int dataCount = 0;
 void loop() {
 
     //demoLaunch();
     //ACTUAL LAUNCH TIME
-    #ifdef ACTUAL_LAUNCH
+    
         
         static Timer timer(10000);
         while (launch == false)
@@ -891,15 +952,20 @@ void loop() {
                     doc["message"] = "Ready for Launch" ;
                     
                 }
-              launch=timer.hasElapsed();
+              #ifdef ACTUAL_LAUNCH
+                launch=waitForBurnout();
+              #else
+                launch=timer.hasElapsed();
+              #endif
+              
               Serial.println("Checked Time");
               if ((millis() - filewritetime) > 500 || launch == true) {
                 Serial.println("Checked Time2");
                 filewritetime = millis();
               serializeJson(doc, dataOut);
-              
-              while(!SD.open(dataName)) {
-                dataName = ((char)dataCount) +"datalog.txt";
+              serializeJson(doc, Serial);
+              while(SD.exists(dataName)) {
+                dataName = (((char)dataCount) +  'datalog.txt');
                 dataCount ++;
                 Serial.println(dataName);
               }
@@ -912,9 +978,7 @@ void loop() {
                 dataFile.close();
                 // print to the serial port too:
                 Serial.println(dataOut);
-              }
-              // if the file isn't open, pop up an error:
-              else {
+              } else {
                 Serial.println("error opening datalog.txt");
               }
               }
@@ -937,13 +1001,17 @@ void loop() {
           Serial.println("error opening datalog.txt");
         }
         Serial.println("waiting 3");
-        delay(3000);
-        demoLaunch();
+        #ifdef ACTUAL_LAUNCH
+          launchtime();
+        #else
+          delay(3000);
+          demoLaunch();
+        #endif
         //launchtime();
 
         
         
-    #endif
+    
   }
   
 
