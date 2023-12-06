@@ -77,6 +77,7 @@ int fullOpen = 100; //100 percent open - total degrees of motion from offset
 double dragConst = 0.561; // average drag coefficient
 double mass = 0.61; // mass of rocket
 double g = 9.80665;
+const double pi = 3.14159;
 
 float gain = 2.463; //gain got from fusion
 
@@ -346,7 +347,7 @@ bool do50hz(DynamicJsonDocument doc) {
       Serial.println(speed);
       Serial.println(((newaltitude-oldaltitude)));
       oldaltitude = newaltitude;
-      if ((speed > (2)))
+      if ((speed <-2) && (altitude < 260))
       {
         return false; // IS appogee
       }
@@ -486,10 +487,42 @@ double getAirDensity(double groundTemperature, double groundPressure, double cur
 
   }
 
+int getDescentTime(double currentHeight, double currentSpeed){
+  return round(currentHeight/currentSpeed);
+
+}
+double descentVel;
+double descentTime;
+double paraCd = 0.75;
+double paraDiam = 0.8636; // m 34 in
+double descentMass = 0.61; // kilos
+bool shouldOpenChute(double currentHeight, double timeSinceLaunch){
+  double estAirDensity = getAirDensity(23.3, 135.4, currentHeight);
+  descentVel = sqrt((8*mass*g) / (pi*estAirDensity*paraCd*paraDiam));
+  Serial.println("descentVel");
+  Serial.println(descentVel);
+  descentTime = getDescentTime(currentHeight, descentVel);
+  Serial.println("descentTime");
+  Serial.println(descentTime);
+  if ((descentTime+timeSinceLaunch) > 40 && (descentTime+timeSinceLaunch) <48){
+    return true;
+  } else{
+
+  if((descentTime+timeSinceLaunch) <=40){
+    return true;
+  }
+
+  }
+   
+  
+  return false;
+}
 
 
+double getTimeSinceLaunch(double timeOfLaunch){
 
-
+  return millis() - timeOfLaunch;
+}
 
 
 
@@ -499,7 +532,7 @@ double getAirDensity(double groundTemperature, double groundPressure, double cur
 double projectedApogee ;
 float lastAngle = 0;
 double angle;
-
+double timeOfLaunch;
 void launchtime() {
   
   
@@ -509,6 +542,7 @@ void launchtime() {
   //digitalWrite(PYRO_PINL, LOW);
 
   bool notappoge = true;
+  timeOfLaunch = millis();
 
   while(notappoge == true)
   {
@@ -612,14 +646,8 @@ void launchtime() {
   {
     StaticJsonDocument<500> doc;
             //get data
-            if (mpu.dmpGetCurrentFIFOPacket(fifoBuffer)) {
-                mpu.dmpGetQuaternion(&q, fifoBuffer);
-                mpu.dmpGetAccel(&aa, fifoBuffer);
-                mpu.dmpGetGravity(&gravity, &q);
-                mpu.dmpGetLinearAccel(&aaReal, &aa, &gravity);
-                mpu.dmpGetLinearAccelInWorld(&aaWorld, &aaReal, &q);
-                mpu.dmpGetYawPitchRoll(ypr, &q, &gravity);
-                if (! bmp.performReading()) {
+            
+                if (!bmp.performReading()) {
                     Serial.println("Failed to perform reading :(");
                     
                 } else {
@@ -629,7 +657,7 @@ void launchtime() {
                     doc["tempurature"] = bmp.temperature;
                     doc["message"] = "Descending" ;
                     do50hz(doc);
-                    doc["speed"] = ceil(speed*1000)/1000 ;
+                    doc["speed"] = ceil(speed*1000)/1000;
 
                 }
                 // Serial.print("ypr\t");
@@ -640,23 +668,12 @@ void launchtime() {
                 // Serial.print(ypr[2] * 180/M_PI);
 
                 //Serial.print("ypr\t");
-                float yaw = ypr[2] * 180/M_PI;
                 
-                float pitch = ypr[1] * 180/M_PI;
+               
+                //String preoutput = "";
+                serializeJson(doc, Serial);
                 
-                float roll = ypr[1] * 180/M_PI;
-
-
-                doc["yaw"] = ceil(yaw*1000)/1000 ;
-                doc["pitch"] = ceil(pitch*1000)/1000;
-                doc["roll"] = ceil(roll*1000)/1000;
-                doc["xccel"] = aaWorld.x ;
-                doc["yaccel"] = aaWorld.y ;
-                doc["zaccel"] = aaWorld.z ;
-                String preoutput = "";
-                serializeJson(doc, preoutput);
-                
-            }
+            
             
           
 
