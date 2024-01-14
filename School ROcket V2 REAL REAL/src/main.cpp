@@ -14,6 +14,8 @@
 #include <iostream>
 #include <sstream>
 #include <cmath>
+#include <stdlib.h>     /* srand, rand */
+#include <Entropy.h>
 //#include <./projectileMotionQuadraticDrag/mainAltiProject.h>
 using namespace std;
 //#include "MPU6050.h" // not necessary if using MotionApps include file
@@ -84,13 +86,13 @@ float gain = 2.463; //gain got from fusion
 //PID Loop setup stuff
 double SetpointY, InputY, OutputY;
 double SetpointP, InputP, OutputP;
-float consKp = 1.6, consKi = 0.7, consKd = 0;
+float consKp = 8.6, consKi = 0.7, consKd = 0;
 PID upPID(&InputY, &OutputY, &SetpointY, consKp, consKi, consKd, REVERSE);
 PID downPID(&InputP, &OutputP, &SetpointP, consKp, consKi, consKd, DIRECT);
-int yawOffset = 80; //offset of pos from 90 degrees
-int yawMax = 170;
-int pitchOffset = 80; //offset of pos from 90 degrees
-int pitchMax = 170;
+int yawOffset = 60; //offset of pos from 90 degrees
+int yawMax = 180;
+int pitchOffset = 60; //offset of pos from 90 degrees
+int pitchMax = 180;
 
 
 //Altitude projection 
@@ -131,7 +133,7 @@ void setup() {
     // really up to you depending on your project)
     Serial.begin(115200);
     delay(1000);
-
+    Entropy.Initialize();
      // join I2C bus (I2Cdev library doesn't do this automatically)
     #if I2CDEV_IMPLEMENTATION == I2CDEV_ARDUINO_WIRE
         Wire.begin();
@@ -311,7 +313,7 @@ void setup() {
       Serial.println("Note: press reset button on the board and reopen this Serial Monitor after fixing your issue!");
       while (true);
     }
-
+    
     Serial.println("initialization done.");
 
 
@@ -368,13 +370,14 @@ bool do50hz(DynamicJsonDocument doc) {
 
 
 String dataOut = "";
-char* dataName = 'datalog5InFlight.txt';
+String dataName;
+
 
 void log2hz(DynamicJsonDocument doc) { 
 	if (millis() - lastSendTime > 500) {
     Serial.println("Logging");
     lastSendTime = millis();            // timestamp the message
-    File dataFile = SD.open(dataName, FILE_WRITE);
+    File dataFile = SD.open(dataName.c_str(), FILE_WRITE);
     Serial.println("Logging2");
     if (dataFile) {
                 serializeJson(doc, dataOut);
@@ -514,7 +517,7 @@ double paraDiam = 0.8636; // m 34 in
 double descentMass = 0.61; // kilos
 bool shouldOpenChute(double currentHeight, double timeSinceLaunch){
   double estAirDensity = getAirDensity(23.3, 135.4, currentHeight);
-  descentVel = sqrt((8*mass*g) / (pi*estAirDensity*paraCd*paraDiam));
+  descentVel = sqrt((8*descentMass*g) / (pi*estAirDensity*paraCd*paraDiam));
   Serial.println("descentVel");
   Serial.println(descentVel);
   descentTime = getDescentTime(currentHeight, descentVel);
@@ -548,11 +551,8 @@ double getTimeSinceLaunch(double timeOfLaunch){
 double projectedApogee ;
 float lastAngle = 0;
 double angle;
-<<<<<<< HEAD
-double timeOfLaunch;
-=======
-int filewritetime = 0;
->>>>>>> 5fba12321dd8cbc5632986e7afeab9ecea30e496
+int timeOfLaunch;
+int filewritetime;
 void launchtime() {
   
   
@@ -560,10 +560,10 @@ void launchtime() {
   //digitalWrite(PYRO_PINL, HIGH);
   //delay(1000);
   //digitalWrite(PYRO_PINL, LOW);
-
+  pitchServo.write(80);
   bool notappoge = true;
   timeOfLaunch = millis();
-
+  //dataName = "datalog5InFlight.txt";
   while(notappoge == true)
   {
     StaticJsonDocument<500> doc;
@@ -599,7 +599,9 @@ void launchtime() {
 
 
 
-                //InputY = getProjectedAltitude(Cd, v, alt);//calculate Input to PID
+               
+            
+                
                 InputY = getMaxHeight(altitude, speed);
                 Serial.print("ProjectedApogee: ");
                 Serial.println(InputY);
@@ -617,27 +619,19 @@ void launchtime() {
                 //yawPID.Compute();
                 //pitchPID.Compute();
                 #ifdef USE_SERVOS
+                
+                
                 int yservopos = round(yawMax - ((yawMax- yawOffset)*(OutputY/100.0)));
-                if ((yservopos < (50)) | (yservopos >(175)))
+                if ((yservopos < (50)) | (yservopos >(180)))
                 {
                     Serial.print("Yaw out of range!!");
                 } else
                 {
                     yawServo.write(yservopos);
+                    //pitchServo.write(yservopos);
                 }
                 
-                //Serial.print("yaw"); // limits 153 front and 100 back
-                //Serial.print(yservopos);
-                //Serial.print("\n");
                 
-                int pservopos = round(pitchMax - ((pitchMax- pitchOffset)*(OutputY/100.0)));
-                if ((pservopos < (50)) | (pservopos >(175)))
-                {
-                    Serial.print("Pitch out of range!!");
-                } else
-                {
-                    pitchServo.write(pservopos);
-                }
                 
               #endif
                 
@@ -646,7 +640,7 @@ void launchtime() {
                 //Serial.print("\n");
                
                 doc["yawservo"] = ceil(yservopos*1000)/1000 ;
-                doc["pitchservo"] = ceil(pservopos*1000)/1000 ;
+                doc["pitchservo"] = ceil(yservopos*1000)/1000 ;
                 doc["yawPID"] = ceil(OutputY*1000)/1000 ;
                 //doc["pitchPID"] = ceil(OutputP*1000)/1000 ;
                 doc["altitude"] = altitude;
@@ -656,29 +650,30 @@ void launchtime() {
                 doc["projectedAltitude"] = projectedApogee;
                 //String loraoutput = "fff";
                 serializeJson(doc, Serial);
-                if ((millis() - filewritetime) > 500 ) {
-                  Serial.println("Checked Time2");
-                  filewritetime = millis();
-                  serializeJson(doc, dataOut);
-                  serializeJson(doc, Serial);
-                  // while(SD.exists(dataName)) {
-                  //   dataName = (((char)dataCount) +  'datalog.txt');
-                  //   dataCount ++;
-                  //   Serial.println(dataName);
-                  // }
-                  //Serial.println(dataName);
-                  File dataFile = SD.open("datalog55.txt", FILE_WRITE);
-                  Serial.println("Checked Time3");
-                  // if the file is available, write to it:
-                  if (dataFile) {
-                    dataFile.println(dataOut + "\n");
-                    dataFile.close();
-                    // print to the serial port too:
-                    Serial.println(dataOut);
-                  } else {
-                    Serial.println("error opening datalog.txt");
-                  }
-              }
+                log2hz(doc);
+              //   if ((millis() - filewritetime) > 500 ) {
+              //     Serial.println("Checked Time2");
+              //     filewritetime = millis();
+              //     serializeJson(doc, dataOut);
+              //     serializeJson(doc, Serial);
+              //     // while(SD.exists(dataName)) {
+              //     //   dataName = (((char)dataCount) +  'datalog.txt');
+              //     //   dataCount ++;
+              //     //   Serial.println(dataName);
+              //     // }
+              //     //Serial.println(dataName);
+              //     File dataFile = SD.open(dataName.c_str(), FILE_WRITE);
+              //     Serial.println("Checked Time3");
+              //     // if the file is available, write to it:
+              //     if (dataFile) {
+              //       dataFile.println(dataOut + "\n");
+              //       dataFile.close();
+              //       // print to the serial port too:
+              //       Serial.println(dataOut);
+              //     } else {
+              //       Serial.println("error opening datalog.txt");
+              //     }
+              // }
                 //serializeJson(doc, loraoutput);
                 //sendData("Helloooo");
                 
@@ -697,15 +692,27 @@ void launchtime() {
                     Serial.println("Failed to perform reading :(");
                     
                 } else {
-                    doc["altitude"] = ceil((bmp.readAltitude(SEALEVELPRESSURE_HPA))*1000)/1000;
+                    doc["altitude"], altitude = ceil((bmp.readAltitude(SEALEVELPRESSURE_HPA))*1000)/1000;
                     doc["tempurature"] = ceil((bmp.temperature)*1000)/1000;
-                    doc["altitude"] = bmp.readAltitude(SEALEVELPRESSURE_HPA);
+                    
                     doc["tempurature"] = bmp.temperature;
                     doc["message"] = "Descending" ;
                     do50hz(doc);
                     doc["speed"] = ceil(speed*1000)/1000;
 
                 }
+
+                if ((millis() - filewritetime) > 500 ) {
+                  Serial.println("Checked Time2");
+                  filewritetime = millis();
+                  
+                  if(shouldOpenChute(altitude, millis()-timeOfLaunch)){
+                    pitchServo.write(0);
+                    doc["message"] = "Second Chute Deployed" ;
+                  } else {
+                    pitchServo.write(80);
+                  }
+              }
                 // Serial.print("ypr\t");
                 // Serial.print(ypr[0] * 180/M_PI);
                 // Serial.print("\t");
@@ -718,6 +725,9 @@ void launchtime() {
                
                 //String preoutput = "";
                 serializeJson(doc, Serial);
+                log2hz(doc);
+
+                
                 
             
             
@@ -915,7 +925,7 @@ void demoLaunch() {
                 //pitchPID.Compute();
                 #ifdef USE_SERVOS
                 int yservopos = round(yawMax - ((yawMax- yawOffset)*(OutputY/100.0)));
-                if ((yservopos < (50)) | (yservopos >(175)))
+                if ((yservopos < (50)) | (yservopos >(180)))
                 {
                     Serial.print("Yaw out of range!!");
                 } else
@@ -928,7 +938,7 @@ void demoLaunch() {
                 //Serial.print("\n");
                 
                 int pservopos = round(pitchMax - ((pitchMax- pitchOffset)*(OutputY/100.0)));
-                if ((pservopos < (50)) | (pservopos >(175)))
+                if ((pservopos < (50)) | (pservopos >(180)))
                 {
                     Serial.print("Pitch out of range!!");
                 } else
@@ -994,7 +1004,10 @@ bool launch = false;
 //char* dataName = '00datalog.txt';
 int dataCount = 0;
 void loop() {
-
+    
+    Serial.println(Entropy.random(0, 1));
+    dataName = "datalog"+ ((String)(Entropy.random(0, 1000))) + ".txt";
+    Serial.println(dataName);
     //demoLaunch();
     //ACTUAL LAUNCH TIME
     
@@ -1018,17 +1031,18 @@ void loop() {
                 }
               #ifdef ACTUAL_LAUNCH
                 launch=waitForBurnout();
+                //launch=timer.hasElapsed();
               #else
                 launch=timer.hasElapsed();
               #endif
               
               Serial.println("Checked Time");
-              yawServo.write(80);
-              pitchServo.write(80);
-              delay(500);
-              yawServo.write(170);
-              pitchServo.write(170);
-              delay(500);
+              yawServo.write(60);
+              //pitchServo.write(0); // 0 IS OPEN THE PARACHUTE
+              delay(1000);
+              yawServo.write(180);
+              //pitchServo.write(180);
+              delay(1000);
               if ((millis() - filewritetime) > 500 || launch == true) {
                 Serial.println("Checked Time2");
                 filewritetime = millis();
@@ -1040,7 +1054,7 @@ void loop() {
               //   Serial.println(dataName);
               // }
               //Serial.println(dataName);
-              File dataFile = SD.open("datalog55.txt", FILE_WRITE);
+              File dataFile = SD.open(dataName.c_str(), FILE_WRITE);
               Serial.println("Checked Time3");
               // if the file is available, write to it:
               if (dataFile) {
@@ -1057,7 +1071,7 @@ void loop() {
         StaticJsonDocument<500> doc;
         doc["message"] = "START";
         serializeJson(doc, dataOut);
-        File dataFile = SD.open("datalog.txt", FILE_WRITE);
+        File dataFile = SD.open(dataName.c_str(), FILE_WRITE);
 
         // if the file is available, write to it:
         if (dataFile) {
