@@ -1037,7 +1037,7 @@ void loop() {
               #endif
               
               Serial.println("Checked Time");
-              yawServo.write(60);
+              //yawServo.write(60);
               //pitchServo.write(0); // 0 IS OPEN THE PARACHUTE
               delay(1000);
               yawServo.write(180);
