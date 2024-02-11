@@ -37,7 +37,7 @@ MPU6050 mpu;
 //Start custom stuff for the tvc. 
 //uncomment #define USE_TVC if you want to use
 
-#define ACTUAL_LAUNCH
+//#define ACTUAL_LAUNCH
 #define USE_SERVOS
 
 #define INTERRUPT_PIN 2  // use pin 2 on Arduino Uno & most boards
@@ -1034,12 +1034,18 @@ void loop() {
                 //launch=timer.hasElapsed();
               #else
                 launch=timer.hasElapsed();
+                  yawServo.write(60);
+              //pitchServo.write(0); // 0 IS OPEN THE PARACHUTE
+                  delay(1000); 
+                  yawServo.write(180);
+                  //pitchServo.write(180);
+                  delay(1000);
               #endif
               
               Serial.println("Checked Time");
               //yawServo.write(60);
               //pitchServo.write(0); // 0 IS OPEN THE PARACHUTE
-              delay(1000);
+              delay(1000); 
               yawServo.write(180);
               //pitchServo.write(180);
               delay(1000);
