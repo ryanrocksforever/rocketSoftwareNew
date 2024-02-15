@@ -96,7 +96,7 @@ int pitchMax = 180;
 
 
 //Altitude projection 
-
+double baseAltitude = 0;
 
 //projectedAlt finalAlt {  };
 
@@ -237,6 +237,7 @@ void setup() {
         Serial.println(" m");
 
         Serial.println();
+        baseAltitude = bmp.readAltitude(SEALEVELPRESSURE_HPA);
 
 
 
@@ -520,7 +521,7 @@ bool shouldOpenChute(double currentHeight, double timeSinceLaunch){
   descentVel = sqrt((8*descentMass*g) / (pi*estAirDensity*paraCd*paraDiam));
   Serial.println("descentVel");
   Serial.println(descentVel);
-  descentTime = getDescentTime(currentHeight, descentVel);
+  descentTime = getDescentTime(abs(currentHeight-baseAltitude), descentVel);
   Serial.println("descentTime");
   Serial.println(descentTime);
   if ((descentTime+timeSinceLaunch) > 40 && (descentTime+timeSinceLaunch) <48){
@@ -602,7 +603,7 @@ void launchtime() {
                
             
                 
-                InputY = getMaxHeight(altitude, speed);
+                InputY = getMaxHeight(abs(altitude-baseAltitude), speed);
                 Serial.print("ProjectedApogee: ");
                 Serial.println(InputY);
                 
