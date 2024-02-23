@@ -147,6 +147,8 @@ void setup() {
     mpu.initialize();
     pinMode(INTERRUPT_PIN, INPUT);
 
+    pinMode(13, OUTPUT); //2 is buzzer pin
+
     // verify connection
     Serial.println(F("Testing device connections..."));
     Serial.println(mpu.testConnection() ? F("MPU6050 connection successful") : F("MPU6050 connection failed"));
@@ -392,6 +394,23 @@ void log2hz(DynamicJsonDocument doc) {
     }
   
 }
+int lastServoWrite = 0;
+void writeServo10hz(int pos) { 
+	if (millis() - lastServoWrite > 100) {
+      yawServo.write(pos);
+      lastServoWrite = millis();
+    }
+  
+}
+int lastBeep;
+void beep2sec() { 
+	if (millis() - lastBeep > 2000 || blinkState == true) {
+      blinkState = !blinkState;
+      digitalWrite(LED_PIN, blinkState);
+      lastBeep = millis();
+    }
+  
+}
 
 int lastSendTimeBurn = 0;
 bool waitForBurnout() {
@@ -428,7 +447,7 @@ bool waitForBurnout() {
                 }
                  
                   
-                  if(aaReal.z < -2000 && altitude >160 && (speed >0.5 || speed < 0.5)) {
+                  if(aaReal.z < -100 && altitude >(160 +baseAltitude )&& (speed >0.5 || speed < 0.5)) {
                     return true;
                   }
 
@@ -628,7 +647,7 @@ void launchtime() {
                     Serial.print("Yaw out of range!!");
                 } else
                 {
-                    yawServo.write(yservopos);
+                    writeServo10hz(yservopos);
                     //pitchServo.write(yservopos);
                 }
                 
@@ -679,7 +698,7 @@ void launchtime() {
                 //sendData("Helloooo");
                 
                 notappoge = do50hz(doc);
-                
+                delay(10);
 
   }
   //appogee hit, deploy chute
@@ -931,7 +950,7 @@ void demoLaunch() {
                     Serial.print("Yaw out of range!!");
                 } else
                 {
-                    yawServo.write(yservopos);
+                  writeServo10hz(yservopos);
                 }
                 
                 //Serial.print("yaw"); // limits 153 front and 100 back
@@ -944,7 +963,7 @@ void demoLaunch() {
                     Serial.print("Pitch out of range!!");
                 } else
                 {
-                    pitchServo.write(pservopos);
+                    pitchServo.write(pservopos); 
                 }
                 
               #endif
@@ -963,7 +982,7 @@ void demoLaunch() {
                 
 
                 index ++;
-                delay(1000);
+                delay(100);
   }
   //appogee hit, deploy chute
   
@@ -1018,8 +1037,7 @@ void loop() {
         {
           
             StaticJsonDocument<500> doc;
-            blinkState = !blinkState;
-            digitalWrite(LED_PIN, blinkState);
+            beep2sec();
 
             if (! bmp.performReading()) {
                     Serial.println("Failed to perform reading :(");
@@ -1041,15 +1059,16 @@ void loop() {
                   yawServo.write(180);
                   //pitchServo.write(180);
                   delay(1000);
-              #endif
-              
-              Serial.println("Checked Time");
-              //yawServo.write(60);
+                  //yawServo.write(60);
               //pitchServo.write(0); // 0 IS OPEN THE PARACHUTE
               delay(1000); 
               yawServo.write(180);
               //pitchServo.write(180);
               delay(1000);
+              #endif
+              
+              Serial.println("Checked Time");
+              
               if ((millis() - filewritetime) > 500 || launch == true) {
                 Serial.println("Checked Time2");
                 filewritetime = millis();
@@ -1073,7 +1092,9 @@ void loop() {
                 Serial.println("error opening datalog.txt");
               }
               }
+             // digitalWrite(13, HIGH);
               delay(100);
+              //digitalWrite(13, LOW);
         }
         StaticJsonDocument<500> doc;
         doc["message"] = "START";
