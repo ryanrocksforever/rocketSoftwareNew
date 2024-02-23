@@ -37,7 +37,7 @@ MPU6050 mpu;
 //Start custom stuff for the tvc. 
 //uncomment #define USE_TVC if you want to use
 
-//#define ACTUAL_LAUNCH
+#define ACTUAL_LAUNCH
 #define USE_SERVOS
 
 #define INTERRUPT_PIN 2  // use pin 2 on Arduino Uno & most boards
@@ -295,6 +295,8 @@ void setup() {
       yawServo.attach(20);
       pitchServo.attach(21);
       yawServo.write(yawOffset);  // 140 is 90
+      delay(500);
+      yawServo.write(180);
       pitchServo.write(pitchOffset);
       SetpointY = 252;
       SetpointP = 250;
