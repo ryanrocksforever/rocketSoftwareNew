@@ -239,12 +239,35 @@ void setup() {
         Serial.println(" m");
 
         Serial.println();
-        baseAltitude = bmp.readAltitude(SEALEVELPRESSURE_HPA);
+        //baseAltitude = bmp.readAltitude(SEALEVELPRESSURE_HPA);
 
 
 
         }
         
+
+        }
+        delay(2000);
+        if (! bmp.performReading()) {
+            Serial.println("Failed to perform reading :(");
+            
+        } else {
+            Serial.print("Temperature = ");
+        Serial.print(bmp.temperature);
+        Serial.println(" *C");
+
+        Serial.print("Pressure = ");
+        Serial.print(bmp.pressure / 100.0);
+        Serial.println(" hPa");
+
+        Serial.print("Approx. Altitude = ");
+        Serial.print(bmp.readAltitude(SEALEVELPRESSURE_HPA));
+        Serial.println(" m");
+
+        Serial.println("Base Altitude:");
+        baseAltitude = bmp.readAltitude(SEALEVELPRESSURE_HPA);
+        Serial.println(baseAltitude);
+
 
         }
         
@@ -355,7 +378,7 @@ bool do50hz(DynamicJsonDocument doc) {
       Serial.println(speed);
       Serial.println(((newaltitude-oldaltitude)));
       oldaltitude = newaltitude;
-      if ((speed <-2) && (altitude < 260))
+      if ((speed <-2) && (altitude < baseAltitude + 200))
       {
         return false; // IS appogee
       }
@@ -435,11 +458,11 @@ bool waitForBurnout() {
                       newaltitude = altitude;
                       speed = ((newaltitude-oldaltitude)/200)*1000;
                       //doc["speed"] = ceil(speed*1000)/1000 ;
-                      Serial.println("SPeed");
+                      Serial.print("SPeed: ");
                       Serial.println(speed);
-                      Serial.println("Accel");
-                      Serial.println(aaReal.z );
-                      Serial.println("Altitude");
+                      Serial.print("Accel:     ");
+                      Serial.println(aaReal.y );
+                      Serial.print("Altitude: ");
                       Serial.println(altitude);
                       Serial.println(((newaltitude-oldaltitude)));
                       oldaltitude = newaltitude;
@@ -448,8 +471,8 @@ bool waitForBurnout() {
 
                 }
                  
-                  
-                  if(aaReal.z < -100 && altitude >(160 +baseAltitude )&& (speed >0.5 || speed < 0.5)) {
+                  // 
+                  if(aaReal.y < 6000 && altitude >(160 +baseAltitude )&& (speed >0.5 || speed < 0.5)) {
                     return true;
                   }
 
@@ -1069,7 +1092,7 @@ void loop() {
               delay(1000);
               #endif
               
-              Serial.println("Checked Time");
+              //Serial.println("Checked Time");
               
               if ((millis() - filewritetime) > 500 || launch == true) {
                 Serial.println("Checked Time2");
@@ -1083,13 +1106,13 @@ void loop() {
               // }
               //Serial.println(dataName);
               File dataFile = SD.open(dataName.c_str(), FILE_WRITE);
-              Serial.println("Checked Time3");
+              //Serial.println("Checked Time3");
               // if the file is available, write to it:
               if (dataFile) {
                 dataFile.println(dataOut + "\n");
                 dataFile.close();
                 // print to the serial port too:
-                Serial.println(dataOut);
+                //Serial.println(dataOut);
               } else {
                 Serial.println("error opening datalog.txt");
               }
@@ -1100,6 +1123,7 @@ void loop() {
         }
         StaticJsonDocument<500> doc;
         doc["message"] = "START";
+        dataOut = "";
         serializeJson(doc, dataOut);
         File dataFile = SD.open(dataName.c_str(), FILE_WRITE);
 
@@ -1108,7 +1132,7 @@ void loop() {
           dataFile.println(dataOut);
           dataFile.close();
           // print to the serial port too:
-          Serial.println(dataOut);
+          //Serial.println(dataOut);
         }
         // if the file isn't open, pop up an error:
         else {
