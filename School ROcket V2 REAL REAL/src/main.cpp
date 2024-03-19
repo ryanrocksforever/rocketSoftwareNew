@@ -14,8 +14,7 @@
 #include <iostream>
 #include <sstream>
 #include <cmath>
-#include <stdlib.h>     /* srand, rand */
-#include <Entropy.h>
+#include <stdlib.h>     /* srand, rand */+
 //#include <./projectileMotionQuadraticDrag/mainAltiProject.h>
 using namespace std;
 //#include "MPU6050.h" // not necessary if using MotionApps include file
@@ -43,6 +42,7 @@ MPU6050 mpu;
 #define INTERRUPT_PIN 2  // use pin 2 on Arduino Uno & most boards
 #define LED_PIN 13 // (Arduino is 13, Teensy is 11, Teensy++ is 6)
 bool blinkState = false;
+
 
 // MPU control/status vars
 bool dmpReady = false;  // set true if DMP init was successful
@@ -321,8 +321,8 @@ void setup() {
       delay(500);
       yawServo.write(180);
       pitchServo.write(pitchOffset);
-      SetpointY = 252;
-      SetpointP = 250;
+      SetpointY = 260;
+      SetpointP = 260;
       upPID.SetOutputLimits(0, 100);
       downPID.SetOutputLimits(0, 100);
       upPID.SetMode(AUTOMATIC);
@@ -399,12 +399,12 @@ bool do50hz(DynamicJsonDocument doc) {
 
 String dataOut = "";
 String dataName;
-
+int lastLogTime1 = 0;
 
 void log2hz(DynamicJsonDocument doc) { 
-	if (millis() - lastSendTime > 500) {
+	if (millis() - lastLogTime1 > 500) {
     Serial.println("Logging");
-    lastSendTime = millis();            // timestamp the message
+    lastLogTime1 = millis();            // timestamp the message
     File dataFile = SD.open(dataName.c_str(), FILE_WRITE);
     Serial.println("Logging2");
     if (dataFile) {
@@ -465,14 +465,14 @@ bool waitForBurnout() {
                       Serial.print("Altitude: ");
                       Serial.println(altitude);
                       Serial.println(((newaltitude-oldaltitude)));
-                      oldaltitude = newaltitude;
+                      oldaltitude = newaltitude; 
                       
                     }
 
                 }
                  
                   // 
-                  if(aaReal.y < 6000 && altitude >(160 +baseAltitude )&& (speed >0.5 || speed < 0.5)) {
+                  if(aaReal.y < 6000 && altitude >(130 +baseAltitude )&& (speed >0.5 || speed < 0.5)) {
                     return true;
                   }
 
